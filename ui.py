@@ -9,9 +9,10 @@ import traceback
 import cv2
 import numpy as np
 from PyQt5.QtCore import QRectF, Qt, pyqtSignal
-from PyQt5.QtGui import QColor, QFont, QPainter, QPalette, QPen
+from PyQt5.QtCore import QRegExp
+from PyQt5.QtGui import QColor, QFont, QPainter, QPalette, QPen, QRegExpValidator
 from PyQt5.QtWidgets import (
-    QApplication, QCheckBox, QFileDialog, QFrame, QHBoxLayout, QLabel, QMainWindow,
+    QApplication, QCheckBox, QFileDialog, QFrame, QHBoxLayout, QLabel, QLineEdit, QMainWindow,
     QMessageBox, QPlainTextEdit, QPushButton, QScrollArea, QSizePolicy, QSlider,
     QTabWidget, QVBoxLayout, QWidget,
 )
@@ -42,8 +43,11 @@ QFrame#card { background: #171d2b; border: 1px solid #252e41; border-radius: 14p
 QLabel#cardTitle { font-size: 11pt; font-weight: 600; color: #f1f4f9; }
 QLabel#cardHint, QLabel#caption { color: #8b93a7; font-size: 9pt; }
 QLabel#paramName { color: #c3c9d6; }
-QLabel#paramValue { background: #0f1420; color: #2dd4bf; border: 1px solid #252e41;
-                    border-radius: 6px; padding: 1px 8px; font-family: Consolas; }
+QLineEdit#paramValue { background: #0f1420; color: #2dd4bf; border: 1px solid #252e41;
+                       border-radius: 6px; padding: 1px 6px; font-family: Consolas;
+                       selection-background-color: #2dd4bf; selection-color: #04211d; }
+QLineEdit#paramValue:hover { border-color: #3a4560; }
+QLineEdit#paramValue:focus { border-color: #2dd4bf; background: #0b0f19; }
 QPushButton { background: #1f2737; color: #e6e9ef; border: 1px solid #2f3a50;
               border-radius: 9px; padding: 8px 14px; }
 QPushButton:hover { background: #26304a; border-color: #3d4a66; }
@@ -306,7 +310,7 @@ class ImageCanvas(QWidget):
 
 
 class LabeledSlider(QWidget):
-    """A slider with its name on the left and its live value on the right."""
+    """A slider with its name on the left and an editable value box on the right."""
 
     value_changed = pyqtSignal(float)
 
@@ -319,17 +323,17 @@ class LabeledSlider(QWidget):
         # step: distance between two slider positions
         # tooltip: plain-English explanation shown on hover
         super().__init__()
-        self.minimum, self.step = minimum, step
+        self.minimum, self.maximum, self.step = minimum, maximum, step
         self.is_integer = float(step).is_integer() and float(minimum).is_integer()
         self.slider = QSlider(Qt.Horizontal)
         self.slider.setRange(0, round((maximum - minimum) / step))
         self.slider.setValue(round((default - minimum) / step))
         self.slider.setCursor(Qt.PointingHandCursor)
-        self.value_label = QLabel(objectName="paramValue")
+        self.value_input = self._build_value_input()
         header = QHBoxLayout()
         header.addWidget(QLabel(name, objectName="paramName"))
         header.addStretch()
-        header.addWidget(self.value_label)
+        header.addWidget(self.value_input)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
@@ -338,6 +342,32 @@ class LabeledSlider(QWidget):
         self.setToolTip(tooltip)
         self.slider.valueChanged.connect(self._on_slider_moved)
         self._on_slider_moved()
+
+    # Builds the small value box; a validator blocks letters while typing.
+    def _build_value_input(self) -> QLineEdit:
+        value_input = QLineEdit(objectName="paramValue")
+        value_input.setFixedWidth(64)
+        value_input.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        # only digits (and one "." for decimal sliders); range is handled in _on_text_entered
+        allowed_pattern = r"\d*" if self.is_integer else r"\d*\.?\d*"
+        value_input.setValidator(QRegExpValidator(QRegExp(allowed_pattern)))
+        value_input.editingFinished.connect(self._on_text_entered)
+        return value_input
+
+    # Applies a typed value: clamps to the range, snaps to the step, moves the slider.
+    def _on_text_entered(self) -> None:
+        try:
+            typed_value = float(self.value_input.text())
+        except ValueError:
+            self._show_value()  # empty or half-typed: restore the current value
+            return
+        self.set_value(min(max(typed_value, self.minimum), self.maximum))
+        self._show_value()  # slider may not move (same step), so refresh the box anyway
+
+    # Writes the current value into the box.
+    def _show_value(self) -> None:
+        current = self.value()
+        self.value_input.setText(str(current) if self.is_integer else f"{current:.2f}")
 
     # Returns the current value (int for integer sliders, float otherwise).
     def value(self):
@@ -349,11 +379,10 @@ class LabeledSlider(QWidget):
         # new_value: value to show (snapped to the nearest step)
         self.slider.setValue(round((new_value - self.minimum) / self.step))
 
-    # Updates the value badge and re-emits the new value.
+    # Updates the value box and re-emits the new value.
     def _on_slider_moved(self, *_):
-        current = self.value()
-        self.value_label.setText(str(current) if self.is_integer else f"{current:.2f}")
-        self.value_changed.emit(float(current))
+        self._show_value()
+        self.value_changed.emit(float(self.value()))
 
 
 # Keeps two sliders ordered: lower slider never above upper slider.
