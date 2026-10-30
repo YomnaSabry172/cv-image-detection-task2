@@ -51,6 +51,6 @@ CLAUDE.md        project rules and function contracts — read this first
 ## Notes for teammates
 
 - The UI passes the **RGB image as loaded** to `run_canny` and `evolve_contour`. Convert to grayscale inside your function.
-- Canny thresholds arrive in the **0–255** range.
+- Canny thresholds arrive as percentages in the **0–100** range and are scaled from the strongest post-NMS gradient.
 - Return any image type (bool, float, uint8). The UI scales it for display.
 - If your function raises an exception, the app shows the error message and prints the traceback in the terminal. It does not crash.

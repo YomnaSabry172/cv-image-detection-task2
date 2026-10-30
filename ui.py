@@ -431,10 +431,10 @@ class ShapeDetectionTab(QWidget):
                                            tooltip="Gaussian kernel width (odd). Bigger = more blur, fewer noisy edges.")
         self.sigma_slider = LabeledSlider("Sigma", 0.1, 5.0, 1.4, step=0.1,
                                           tooltip="Gaussian spread. Bigger = smoother image, only strong edges survive.")
-        self.low_slider = LabeledSlider("Low threshold", 0, 255, 30,
-                                        tooltip="Below this, a pixel is not an edge. Lower = more weak edges kept.")
-        self.high_slider = LabeledSlider("High threshold", 0, 255, 80,
-                                         tooltip="Above this, a pixel is a strong edge. Lower = more edges.")
+        self.low_slider = LabeledSlider("Low threshold (%)", 0, 100, 25,
+                                        tooltip="Percentage of the strongest gradient. Lower = more weak edges kept.")
+        self.high_slider = LabeledSlider("High threshold (%)", 0, 100, 75,
+                                         tooltip="Percentage of the strongest gradient. Lower = more strong edges.")
         link_min_max(self.low_slider, self.high_slider)
         for slider in (self.kernel_slider, self.sigma_slider, self.low_slider, self.high_slider):
             layout.addWidget(slider)
