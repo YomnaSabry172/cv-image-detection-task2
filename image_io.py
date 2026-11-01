@@ -4,13 +4,23 @@ import numpy as np
 from PyQt5.QtGui import QImage, QPixmap
 
 
-# Reads an image file from disk and returns it as an RGB numpy array.
+# Longest image side kept on load; bigger images are shrunk so Canny/Hough/snake stay fast.
+MAX_IMAGE_SIDE = 800
+
+
+# Reads an image file from disk and returns it as an RGB numpy array (shrunk if very large).
 def load_image(path: str) -> np.ndarray:
     # path: file path to read (np.fromfile handles non-ASCII Windows paths)
     file_bytes = np.fromfile(path, dtype=np.uint8)
     bgr_image = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
     if bgr_image is None:
         raise ValueError(f"Could not read image: {path}")
+    height, width = bgr_image.shape[:2]
+    longest_side = max(height, width)
+    if longest_side > MAX_IMAGE_SIDE:
+        scale = MAX_IMAGE_SIDE / longest_side
+        new_size = (max(1, round(width * scale)), max(1, round(height * scale)))
+        bgr_image = cv2.resize(bgr_image, new_size, interpolation=cv2.INTER_AREA)
     return cv2.cvtColor(bgr_image, cv2.COLOR_BGR2RGB)
 
 

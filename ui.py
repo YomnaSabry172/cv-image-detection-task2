@@ -453,17 +453,44 @@ class ShapeDetectionTab(QWidget):
             checkbox.setCursor(Qt.PointingHandCursor)
             checkbox_row.addWidget(checkbox)
         layout.addLayout(checkbox_row)
-        self.hough_threshold_slider = LabeledSlider("Threshold (votes)", 1, 500, 100,
-                                                    tooltip="Minimum votes to accept a shape. Lower = more (and more false) detections.")
-        self.r_min_slider = LabeledSlider("Min radius (circles)", 5, 300, 10,
+        self.lines_threshold_slider = LabeledSlider(
+            "Lines threshold (votes)", 1, 500, 100,
+            tooltip="Minimum edge pixels on a line. Lower = more (and more false) lines.")
+        self.circles_threshold_slider = LabeledSlider(
+            "Circles threshold (votes)", 1, 500, 60,
+            tooltip="Minimum edge pixels on a circle. At least 40% of the outline must also be present. Lower = more circles.")
+        self.r_min_slider = LabeledSlider("Min radius", 5, 300, 10,
                                           tooltip="Smallest circle radius searched, in pixels.")
-        self.r_max_slider = LabeledSlider("Max radius (circles)", 5, 300, 60,
+        self.r_max_slider = LabeledSlider("Max radius", 5, 300, 60,
                                           tooltip="Largest circle radius searched. Wider range = slower.")
         link_min_max(self.r_min_slider, self.r_max_slider)
-        for slider in (self.hough_threshold_slider, self.r_min_slider, self.r_max_slider):
-            layout.addWidget(slider)
+        self.ellipses_threshold_slider = LabeledSlider(
+            "Ellipses threshold (votes)", 1, 300, 50,
+            tooltip="Minimum sampled edge points that must fit the ellipse (max 300). Lower = more (and more false) ellipses.")
+        # Each shape shows its own settings only while its checkbox is ticked
+        option_groups = (
+            (self.lines_check, (self.lines_threshold_slider,)),
+            (self.circles_check, (self.circles_threshold_slider, self.r_min_slider, self.r_max_slider)),
+            (self.ellipses_check, (self.ellipses_threshold_slider,)),
+        )
+        for checkbox, sliders in option_groups:
+            layout.addWidget(self._make_option_group(checkbox, sliders))
         layout.addWidget(make_button("Run Hough", self.run_hough, primary=True))
         return card
+
+    # Wraps sliders in a widget that is only visible while its shape checkbox is ticked.
+    def _make_option_group(self, checkbox: QCheckBox, sliders: tuple) -> QWidget:
+        # checkbox: the shape checkbox that shows / hides the group
+        # sliders: the controls that belong to that shape
+        group = QWidget()
+        group_layout = QVBoxLayout(group)
+        group_layout.setContentsMargins(0, 0, 0, 0)
+        group_layout.setSpacing(10)
+        for slider in sliders:
+            group_layout.addWidget(slider)
+        group.setVisible(checkbox.isChecked())
+        checkbox.toggled.connect(group.setVisible)
+        return group
 
     # Loads an image from a dialog (or a dropped path) and resets old results.
     def upload_image(self, path: str = "") -> None:
@@ -522,13 +549,15 @@ class ShapeDetectionTab(QWidget):
 
     # Calls each ticked Hough detector; returns (lines, circles, ellipses) or None on failure.
     def _detect_selected_shapes(self):
-        threshold = self.hough_threshold_slider.value()
         detections = {"lines": [], "circles": [], "ellipses": []}
         jobs = [
-            (self.lines_check, "lines", hough.hough_lines, (self.edge_image, threshold)),
+            (self.lines_check, "lines", hough.hough_lines,
+             (self.edge_image, self.lines_threshold_slider.value())),
             (self.circles_check, "circles", hough.hough_circles,
-             (self.edge_image, self.r_min_slider.value(), self.r_max_slider.value(), threshold)),
-            (self.ellipses_check, "ellipses", hough.hough_ellipses, (self.edge_image, threshold)),
+             (self.edge_image, self.r_min_slider.value(), self.r_max_slider.value(),
+              self.circles_threshold_slider.value())),
+            (self.ellipses_check, "ellipses", hough.hough_ellipses,
+             (self.edge_image, self.ellipses_threshold_slider.value())),
         ]
         for checkbox, key, function, args in jobs:
             if not checkbox.isChecked():
